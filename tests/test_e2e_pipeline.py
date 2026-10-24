@@ -38,6 +38,74 @@ import forum_data_generation as gen_mod
 import forum_log_aggregation as agg_mod
 
 
+def _run_data_generation(ctx_gen):
+    # Task 1: generate_users
+    gen_mod._generate_users(**ctx_gen)
+    # Task 2: generate_logs
+    gen_mod._generate_logs(**ctx_gen)
+    # Task 3: validate_generated_data (pandera + бизнес-правила)
+    gen_mod._validate_generated_data(**ctx_gen)
+
+    # Читаем результат генерации (симуляция таблиц БД)
+    raw_logs = gen_mod._load("logs.json")
+    db_logs_df = pd.DataFrame(raw_logs)
+    db_logs_df["created_at"] = pd.to_datetime(db_logs_df["created_at"], utc=True)
+    return db_logs_df
+
+def _setup_mock_postgres_hook(db_logs_df):
+    def mock_get_pandas_df(sql, parameters=None):
+        date_from_str, date_to_str = parameters
+        start_ts = pd.Timestamp(date_from_str, tz="UTC")
+        # + 1 day
+        end_date = pd.Timestamp(date_to_str, tz="UTC") + pd.Timedelta(days=1)
+        filtered = db_logs_df[
+            (db_logs_df["created_at"] >= start_ts) &
+            (db_logs_df["created_at"] < end_date)
+        ].copy()
+        return filtered.sort_values("created_at")
+
+    def mock_get_first(sql, parameters=None):
+        df = mock_get_pandas_df(sql, parameters)
+        return (len(df),)
+
+    mock_hook = MagicMock()
+    mock_hook.get_pandas_df.side_effect = mock_get_pandas_df
+    mock_hook.get_first.side_effect = mock_get_first
+    return mock_hook
+
+def _run_monthly_aggregation(ctx_agg_month, mock_hook, out_dir):
+    with patch("forum_log_aggregation.PostgresHook", return_value=mock_hook):
+        # Task 1: Sensor
+        sensor = agg_mod.DataAvailabilitySensor(conn_id="forum_db", task_id="check_avail")
+        assert sensor.poke(ctx_agg_month) is True
+
+        # Task 2: extract_raw_logs
+        agg_mod._extract_raw_logs(**ctx_agg_month)
+
+        # Task 3: validate_data (Pandera)
+        agg_mod._validate_data(**ctx_agg_month)
+
+        # Task 4: transform_aggregates
+        agg_mod._transform_aggregates(**ctx_agg_month)
+
+        # Task 5: export_to_csv
+        agg_mod._export_to_csv(**ctx_agg_month)
+
+        # Task 6: alert_on_anomaly
+        agg_mod._alert_on_anomaly(**ctx_agg_month)
+
+    return os.path.join(out_dir, "aggregation_2026-10-01_to_2026-10-31.csv")
+
+def _run_daily_aggregation(ctx_agg_daily, mock_hook, out_dir):
+    with patch("forum_log_aggregation.PostgresHook", return_value=mock_hook):
+        agg_mod._extract_raw_logs(**ctx_agg_daily)
+        agg_mod._validate_data(**ctx_agg_daily)
+        agg_mod._transform_aggregates(**ctx_agg_daily)
+        agg_mod._export_to_csv(**ctx_agg_daily)
+
+    return os.path.join(out_dir, "aggregation_2026-10-15_to_2026-10-15.csv")
+
+
 @pytest.fixture(scope="module")
 def run_full_pipeline():
     """Запускает оба DAG последовательно и возвращает пути к сгенерированным артефактам."""
@@ -58,80 +126,24 @@ def run_full_pipeline():
     try:
         # ─── ШАГ 1: DAG 1 forum_data_generation ───────────────────────────────
         ctx_gen = {"params": {"year": 2026, "month": 10, "n_users": 250}}
-
-        # Task 1: generate_users
-        gen_mod._generate_users(**ctx_gen)
-        # Task 2: generate_logs
-        gen_mod._generate_logs(**ctx_gen)
-        # Task 3: validate_generated_data (pandera + бизнес-правила)
-        gen_mod._validate_generated_data(**ctx_gen)
-
-        # Читаем результат генерации (симуляция таблиц БД)
-        raw_logs = gen_mod._load("logs.json")
-        db_logs_df = pd.DataFrame(raw_logs)
-        db_logs_df["created_at"] = pd.to_datetime(db_logs_df["created_at"], utc=True)
+        db_logs_df = _run_data_generation(ctx_gen)
 
         # ─── ШАГ 2: Симуляция PostgresHook для DAG 2 ──────────────────────────
-        def mock_get_pandas_df(sql, parameters=None):
-            date_from_str, date_to_str = parameters
-            start_ts = pd.Timestamp(date_from_str, tz="UTC")
-            # + 1 day
-            end_date = pd.Timestamp(date_to_str, tz="UTC") + pd.Timedelta(days=1)
-            filtered = db_logs_df[
-                (db_logs_df["created_at"] >= start_ts) &
-                (db_logs_df["created_at"] < end_date)
-            ].copy()
-            return filtered.sort_values("created_at")
-
-        def mock_get_first(sql, parameters=None):
-            df = mock_get_pandas_df(sql, parameters)
-            return (len(df),)
-
-        mock_hook = MagicMock()
-        mock_hook.get_pandas_df.side_effect = mock_get_pandas_df
-        mock_hook.get_first.side_effect = mock_get_first
+        mock_hook = _setup_mock_postgres_hook(db_logs_df)
 
         # ─── ШАГ 3: DAG 2 forum_log_aggregation (Полный месяц) ────────────────
         ctx_agg_month = {
             "params": {"date_from": "2026-10-01", "date_to": "2026-10-31"},
             "ds": "2026-10-31",
         }
-
-        with patch("forum_log_aggregation.PostgresHook", return_value=mock_hook):
-            # Task 1: Sensor
-            sensor = agg_mod.DataAvailabilitySensor(conn_id="forum_db", task_id="check_avail")
-            assert sensor.poke(ctx_agg_month) is True
-
-            # Task 2: extract_raw_logs
-            agg_mod._extract_raw_logs(**ctx_agg_month)
-
-            # Task 3: validate_data (Pandera)
-            agg_mod._validate_data(**ctx_agg_month)
-
-            # Task 4: transform_aggregates
-            agg_mod._transform_aggregates(**ctx_agg_month)
-
-            # Task 5: export_to_csv
-            agg_mod._export_to_csv(**ctx_agg_month)
-
-            # Task 6: alert_on_anomaly
-            agg_mod._alert_on_anomaly(**ctx_agg_month)
-
-        month_csv_path = os.path.join(out_dir, "aggregation_2026-10-01_to_2026-10-31.csv")
+        month_csv_path = _run_monthly_aggregation(ctx_agg_month, mock_hook, out_dir)
 
         # ─── ШАГ 4: DAG 2 forum_log_aggregation (@daily за 1 день) ───────────
         ctx_agg_daily = {
             "params": {"date_from": "2026-10-15", "date_to": "2026-10-15"},
             "ds": "2026-10-15",
         }
-
-        with patch("forum_log_aggregation.PostgresHook", return_value=mock_hook):
-            agg_mod._extract_raw_logs(**ctx_agg_daily)
-            agg_mod._validate_data(**ctx_agg_daily)
-            agg_mod._transform_aggregates(**ctx_agg_daily)
-            agg_mod._export_to_csv(**ctx_agg_daily)
-
-        daily_csv_path = os.path.join(out_dir, "aggregation_2026-10-15_to_2026-10-15.csv")
+        daily_csv_path = _run_daily_aggregation(ctx_agg_daily, mock_hook, out_dir)
 
         yield {
             "month_csv": pd.read_csv(month_csv_path),
