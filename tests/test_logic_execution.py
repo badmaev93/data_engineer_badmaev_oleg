@@ -18,6 +18,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
+from unittest.mock import MagicMock, patch
+
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -499,3 +501,30 @@ class TestLoginLogoutPairing:
 
         assert not violations, \
             f"Непарные login/logout:\n" + "\n".join(violations[:10])
+
+class TestLoadToPostgres:
+    """ТЗ п. 4: Проверяем загрузку в Postgres."""
+
+    @patch("forum_data_generation.PostgresHook")
+    def test_load_to_postgres_rollback_on_exception(self, mock_hook_class):
+        from forum_data_generation import _load_to_postgres
+
+        # Настраиваем моки для хука и коннекта
+        mock_hook = mock_hook_class.return_value
+        mock_conn = MagicMock()
+        mock_hook.get_conn.return_value = mock_conn
+
+        mock_cur = MagicMock()
+        mock_conn.cursor.return_value = mock_cur
+
+        # Заставляем execute бросать исключение (при попытке TRUNCATE)
+        mock_cur.execute.side_effect = Exception("DB error")
+
+        # Запускаем функцию и ожидаем исключение
+        with pytest.raises(Exception, match="DB error"):
+            _load_to_postgres()
+
+        # Проверяем, что был вызван rollback
+        mock_conn.rollback.assert_called_once()
+        mock_cur.close.assert_called_once()
+        mock_conn.close.assert_called_once()
