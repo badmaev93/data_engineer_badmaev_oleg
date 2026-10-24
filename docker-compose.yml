@@ -22,6 +22,7 @@ services:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
+      FORUM_DB_PASSWORD: ${FORUM_DB_PASSWORD:-forum}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
@@ -36,6 +37,9 @@ services:
 
   airflow-init:
     <<: *airflow-common
+    environment:
+      <<: *airflow-env
+      FORUM_DB_PASSWORD: ${FORUM_DB_PASSWORD:-forum}
     entrypoint: /bin/bash
     command: >
       -c "
@@ -51,7 +55,7 @@ services:
           --conn-port 5432
           --conn-schema farpost
           --conn-login forum
-          --conn-password forum || true
+          --conn-password "$${FORUM_DB_PASSWORD:-forum}" || true
       "
     restart: "no"
 

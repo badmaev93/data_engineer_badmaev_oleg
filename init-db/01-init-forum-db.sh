@@ -3,7 +3,7 @@ set -e
 
 # Create forum user and farpost database
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-    CREATE USER forum WITH PASSWORD 'forum';
+    CREATE USER forum WITH PASSWORD '${FORUM_DB_PASSWORD:-forum}';
     CREATE DATABASE farpost OWNER forum;
     GRANT ALL PRIVILEGES ON DATABASE farpost TO forum;
 EOSQL
