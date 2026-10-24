@@ -204,17 +204,16 @@ def _transform_aggregates(**context):
         logouts = success[success["action_type"] == "logout"]
 
         durations = []
-        for uid in logins["user_id"].dropna().unique():
-            u_logins = (
-                logins[logins["user_id"] == uid]
-                .sort_values("created_at")["created_at"]
-                .tolist()
-            )
-            u_logouts = (
-                logouts[logouts["user_id"] == uid]
-                .sort_values("created_at")["created_at"]
-                .tolist()
-            )
+
+        # Optimize by sorting once and grouping, avoiding O(N^2) dataframe filtering in a loop
+        l_sorted = logins.sort_values(["user_id", "created_at"])
+        lo_sorted = logouts.sort_values(["user_id", "created_at"])
+
+        l_grouped = l_sorted.groupby("user_id", sort=False)["created_at"].agg(list)
+        lo_grouped = lo_sorted.groupby("user_id", sort=False)["created_at"].agg(list)
+
+        for uid, u_logins in l_grouped.items():
+            u_logouts = lo_grouped.get(uid, [])
             for li_ts, lo_ts in zip(u_logins, u_logouts):
                 dur = (lo_ts - li_ts).total_seconds()
                 if dur > 0:

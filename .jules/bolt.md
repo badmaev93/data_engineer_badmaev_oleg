@@ -1,0 +1,3 @@
+## 2023-11-20 - O(N^2) DataFrame filtering in Airflow DAG
+**Learning:** In pandas data processing scripts (e.g. `dags/forum_log_aggregation.py`), filtering a full DataFrame inside a loop over unique users scales poorly (O(N^2)). Using `.sort_values()` followed by `.groupby(..., sort=False).agg(list)` is significantly faster (O(N log N) + O(N)) and preserves the chronological order when sorting by `user_id` and `created_at` simultaneously.
+**Action:** When calculating duration or pairing sequential events per user in pandas, avoid `df[df['id'] == uid]`. Sort the combined keys and use `groupby().agg(list)` instead.
