@@ -7,6 +7,7 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "true"
+    AIRFLOW_CONN_FORUM_DB: postgresql://${FORUM_DB_USER:-forum}:${FORUM_DB_PASSWORD:-forum}@postgres:5432/farpost
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -42,16 +43,9 @@ services:
         mkdir -p /opt/airflow/logs /opt/airflow/output &&
         airflow db migrate &&
         airflow users create
-          --username admin --password admin
+          --username ${AIRFLOW_ADMIN_USERNAME:-admin} --password ${AIRFLOW_ADMIN_PASSWORD:-admin}
           --firstname Admin --lastname Admin
-          --role Admin --email admin@admin.com &&
-        airflow connections add forum_db
-          --conn-type postgres
-          --conn-host postgres
-          --conn-port 5432
-          --conn-schema farpost
-          --conn-login forum
-          --conn-password forum || true
+          --role Admin --email admin@admin.com || true
       "
     restart: "no"
 

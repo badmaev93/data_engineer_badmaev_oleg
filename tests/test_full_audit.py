@@ -275,10 +275,10 @@ class TestDockerCompose:
         assert "./output:/opt/airflow/output" in self.raw
 
     def test_forum_db_connection_created(self):
-        """airflow-init создает connection forum_db."""
-        init_cmd = str(self.compose["services"]["airflow-init"].get("command", ""))
-        assert "forum_db" in init_cmd, \
-            "airflow-init должен создавать connection forum_db"
+        """environment создает connection forum_db."""
+        env = str(self.compose["x-airflow-common"].get("environment", ""))
+        assert "AIRFLOW_CONN_FORUM_DB" in env, \
+            "должен задаваться AIRFLOW_CONN_FORUM_DB"
 
     def test_user_uid_set(self):
         """Для Linux-совместимости user должен быть задан."""
@@ -901,7 +901,7 @@ class TestConsistencyBetweenFiles:
 
         assert 'CONN_ID = "forum_db"' in dag1
         assert 'CONN_ID = "forum_db"' in dag2
-        assert "forum_db" in compose
+        assert "FORUM_DB" in compose.upper() or "forum_db" in compose.lower()
 
     def test_action_types_match_enum(self):
         """ACTION_TYPES в DAG1 совпадает с ENUM в schema.sql."""
