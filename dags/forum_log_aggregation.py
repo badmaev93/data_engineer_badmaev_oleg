@@ -40,7 +40,18 @@ def _resolve_dates(context):
     """
     p = context["params"]
     if p.get("date_from") and p.get("date_to"):
-        return str(p["date_from"]), str(p["date_to"])
+        d_from = str(p["date_from"])
+        d_to = str(p["date_to"])
+
+        # 🛡️ Sentinel: [MEDIUM] Validate date parameters to prevent path traversal
+        # Validation ensures inputs are valid dates and blocks things like "../../etc"
+        try:
+            datetime.strptime(d_from, "%Y-%m-%d")
+            datetime.strptime(d_to, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("Security Error: Invalid date format. Must be YYYY-MM-DD")
+
+        return d_from, d_to
     ds = context["ds"]  # logical_date как YYYY-MM-DD
     return ds, ds
 
@@ -266,7 +277,11 @@ def _export_to_csv(**context):
     result = pd.read_parquet(os.path.join(TMP_DIR, "aggregates.parquet"))
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
-    filename = f"aggregation_{date_from}_to_{date_to}.csv"
+    # 🛡️ Sentinel: [MEDIUM] Sanitize output filename to prevent path traversal
+    # Ensure filename only contains base name and not directory traversal dots
+    safe_date_from = os.path.basename(date_from)
+    safe_date_to = os.path.basename(date_to)
+    filename = f"aggregation_{safe_date_from}_to_{safe_date_to}.csv"
     path = os.path.join(OUTPUT_DIR, filename)
     result.to_csv(path, index=False)
 
