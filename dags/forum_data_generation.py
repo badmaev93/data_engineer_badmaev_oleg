@@ -50,7 +50,7 @@ def _load(filename):
         return json.load(f)
 
 
-def _log_entry(user_id, action, desc, target, status, code, ts):
+def _log_entry(user_id, action, desc, ts, target=None, status="success", code=200):
     return {
         "id": str(uuid.uuid4()),
         "user_id": user_id,
@@ -132,10 +132,7 @@ def _generate_logs(**context):
         # ── 1. first_visit (анонимы, 5-15) ──────────────────────────────
         for _ in range(random.randint(5, 15)):
             ts = base + timedelta(seconds=random.randint(0, 86399))
-            logs.append(_log_entry(
-                None, "first_visit", "Первый заход на форум",
-                None, "success", 200, ts,
-            ))
+            logs.append(_log_entry(None, "first_visit", "Первый заход на форум", ts))
 
         # ── 2. register (новые пользователи, 5-8) ──────────────────────
         remaining_days = days_in_month - day_num
@@ -154,11 +151,7 @@ def _generate_logs(**context):
             registered.append(u)
             today_registered.append(u)
 
-            logs.append(_log_entry(
-                u["id"], "register",
-                f"Пользователь {u['username']} зарегистрировался",
-                None, "success", 201, reg_ts,
-            ))
+            logs.append(_log_entry(u["id"], "register", f"Пользователь {u['username']} зарегистрировался", reg_ts, code=201))
 
             # Авто-логин через 1-30 сек после регистрации
             login_ts = reg_ts + timedelta(seconds=random.randint(1, 30))
@@ -167,11 +160,7 @@ def _generate_logs(**context):
             logout_ts = min(login_ts + timedelta(seconds=session_dur), base + timedelta(hours=23, minutes=55))
             session_bounds[u["id"]] = (login_ts, logout_ts)
 
-            logs.append(_log_entry(
-                u["id"], "login",
-                f"Пользователь {u['username']} вошёл (после регистрации)",
-                None, "success", 200, login_ts,
-            ))
+            logs.append(_log_entry(u["id"], "login", f"Пользователь {u['username']} вошёл (после регистрации)", login_ts))
 
         # ── 3. login (ранее зарегистрированные пользователи) ────────────
         # Гарантируем возврат пользователей вчерашней когорты для ненулевого D1 retention
@@ -193,11 +182,7 @@ def _generate_logs(**context):
             logout_ts = min(login_ts + timedelta(seconds=session_dur), base + timedelta(hours=23, minutes=55))
             session_bounds[u["id"]] = (login_ts, logout_ts)
 
-            logs.append(_log_entry(
-                u["id"], "login",
-                f"Пользователь {u['username']} вошёл в систему",
-                None, "success", 200, login_ts,
-            ))
+            logs.append(_log_entry(u["id"], "login", f"Пользователь {u['username']} вошёл в систему", login_ts))
 
         active_uids = list(session_bounds.keys())
 
@@ -228,11 +213,7 @@ def _generate_logs(**context):
             available_topics.append(tid)
             topic_created_map[tid] = ts
 
-            logs.append(_log_entry(
-                uid, "create_topic",
-                f"Создана тема «{topic['title']}»",
-                tid, "success", 201, ts,
-            ))
+            logs.append(_log_entry(uid, "create_topic", f"Создана тема «{topic['title']}»", ts, target=tid, code=201))
 
         # ── 5. create_topic (error — без логина, мин. 2, 2-5 в день) ─────
         for _ in range(random.randint(2, 5)):
@@ -240,7 +221,7 @@ def _generate_logs(**context):
             logs.append(_log_entry(
                 None, "create_topic",
                 "Попытка создать тему без авторизации — отклонено",
-                None, "error", 401, ts,
+                ts, status="error", code=401
             ))
 
         # ── 6. create_post (~50/50 авторизованные / анонимы, 14-24) ──────
@@ -276,10 +257,7 @@ def _generate_logs(**context):
                     }
                     desc = f"Пользователь {u['username']} написал сообщение"
                     posts.append(post)
-                    logs.append(_log_entry(
-                        uid, "create_post", desc,
-                        pid, "success", 201, ts,
-                    ))
+                    logs.append(_log_entry(uid, "create_post", desc, ts, target=pid, code=201))
                     continue
 
             # Иначе — анонимный пост
@@ -297,10 +275,7 @@ def _generate_logs(**context):
             }
             desc = f"Аноним «{guest}» написал сообщение"
             posts.append(post)
-            logs.append(_log_entry(
-                None, "create_post", desc,
-                pid, "success", 201, ts,
-            ))
+            logs.append(_log_entry(None, "create_post", desc, ts, target=pid, code=201))
 
         # ── 7. view_topic (8-20 действий) ───────────────────────────────
         for _ in range(random.randint(8, 20)):
@@ -322,22 +297,14 @@ def _generate_logs(**context):
                     end_sec = int((lo_ts - base).total_seconds()) - 5
                     view_sec = random.randint(start_sec, max(start_sec + 1, end_sec))
                     ts = base + timedelta(seconds=view_sec)
-                    logs.append(_log_entry(
-                        uid, "view_topic",
-                        f"Просмотр темы {tid[:8]}…",
-                        tid, "success", 200, ts,
-                    ))
+                    logs.append(_log_entry(uid, "view_topic", f"Просмотр темы {tid[:8]}…", ts, target=tid))
                     continue
 
             # Анонимный просмотр
             t_sec = int((t_created - base).total_seconds())
             start_sec = max(0, t_sec + 5)
             ts = base + timedelta(seconds=random.randint(start_sec, 86300))
-            logs.append(_log_entry(
-                None, "view_topic",
-                f"Просмотр темы {tid[:8]}…",
-                tid, "success", 200, ts,
-            ))
+            logs.append(_log_entry(None, "view_topic", f"Просмотр темы {tid[:8]}…", ts, target=tid))
 
         # ── 8. delete_topic (мин. 5, 5-7 в день) ─────────────────────────
         candidate_topics = [
@@ -366,20 +333,12 @@ def _generate_logs(**context):
                 ts = lo_ts - timedelta(seconds=random.randint(10, 60))
 
             available_topics.remove(tid)
-            logs.append(_log_entry(
-                uid, "delete_topic",
-                f"Удаление темы {tid[:8]}…",
-                tid, "success", 200, ts,
-            ))
+            logs.append(_log_entry(uid, "delete_topic", f"Удаление темы {tid[:8]}…", ts, target=tid))
 
         # ── 9. logout (все залогиненные пользователи завершают сессию) ───
         for uid, (li_ts, lo_ts) in session_bounds.items():
             u = user_map[uid]
-            logs.append(_log_entry(
-                uid, "logout",
-                f"Пользователь {u['username']} вышел",
-                None, "success", 200, lo_ts,
-            ))
+            logs.append(_log_entry(uid, "logout", f"Пользователь {u['username']} вышел", lo_ts))
 
         yesterday_registered = today_registered
 
