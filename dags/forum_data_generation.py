@@ -418,24 +418,24 @@ def _validate_generated_data(**context):
         "created_at":      Column(str, nullable=False),
     })
     schema.validate(df, lazy=True)
-    print("✅ Pandera schema validation passed")
+    print("Pandera schema validation passed")
 
     # ── Нет логаута без логина ───────────────────────────────────────────
     logout_uids = set(df[df["action_type"] == "logout"]["user_id"].dropna())
     login_uids = set(df[df["action_type"] == "login"]["user_id"].dropna())
     orphan = logout_uids - login_uids
     assert not orphan, f"Logout without login: {orphan}"
-    print("✅ No logout without login")
+    print("No logout without login")
 
     # ── Успешное создание темы только залогиненным ────────────────────────
     ok_topics = df[(df["action_type"] == "create_topic") & (df["response_status"] == "success")]
     assert ok_topics["user_id"].notna().all(), "Successful create_topic with null user_id"
-    print("✅ Successful topic creation only by registered users")
+    print("Successful topic creation only by registered users")
 
     # ── Ошибочное создание темы — без user_id ────────────────────────────
     err_topics = df[(df["action_type"] == "create_topic") & (df["response_status"] == "error")]
     assert err_topics["user_id"].isna().all(), "Error create_topic should have null user_id"
-    print(f"✅ {len(err_topics)} error create_topic entries (all anonymous)")
+    print(f"{len(err_topics)} error create_topic entries (all anonymous)")
 
     # ── Минимум 5 действий каждого типа в день ───────────────────────────
     df["day"] = pd.to_datetime(df["created_at"]).dt.date
@@ -444,12 +444,12 @@ def _validate_generated_data(**context):
         if action in daily.columns:
             min_val = int(daily[action].min())
             assert min_val >= 5, f"{action}: min/day = {min_val}, need ≥ 5"
-    print("✅ Minimum 5 actions per type per day")
+    print("Minimum 5 actions per type per day")
 
     # ── Минимум 2 ошибки create_topic в день ─────────────────────────────
     err_daily = err_topics.groupby(pd.to_datetime(err_topics["created_at"]).dt.date).size()
     assert err_daily.min() >= 2, f"Min error create_topic/day = {err_daily.min()}, need ≥ 2"
-    print("✅ Minimum 2 error create_topic per day")
+    print("Minimum 2 error create_topic per day")
 
     # ── Примерно равное распределение auth/anon постов ────────────────────
     post_logs = df[(df["action_type"] == "create_post") & (df["response_status"] == "success")]
@@ -457,9 +457,9 @@ def _validate_generated_data(**context):
     n_anon = int(post_logs["user_id"].isna().sum())
     total = n_auth + n_anon
     ratio = n_anon / total if total > 0 else 0
-    print(f"ℹ️  Posts: auth={n_auth}, anon={n_anon}, anon_ratio={ratio:.1%}")
+    print(f" Posts: auth={n_auth}, anon={n_anon}, anon_ratio={ratio:.1%}")
     assert 0.3 <= ratio <= 0.7, f"Anon ratio {ratio:.1%} not in [30%-70%]"
-    print("✅ Roughly equal auth/anon post distribution")
+    print("Roughly equal auth/anon post distribution")
 
     # ── Проверка строгой хронологии сессий: login <= действие <= logout ──
     df_auth = df[df["user_id"].notna()].copy()
@@ -484,7 +484,7 @@ def _validate_generated_data(**context):
             ]
             assert len(outside) == 0, f"User {uid} on {day} has actions outside session: {outside}"
 
-    print("✅ Strict session chronology validated (login < actions < logout)")
+    print("Strict session chronology validated (login < actions < logout)")
 
     # ── Проверка хронологии: темы созданы до постов в них ────────────────
     topic_map = {t["id"]: pd.to_datetime(t["created_at"]) for t in topics_data}
@@ -495,9 +495,9 @@ def _validate_generated_data(**context):
             assert post_created >= topic_created, (
                 f"Post {p['id']} ({post_created}) created before topic {p['topic_id']} ({topic_created})"
             )
-    print("✅ Strict topic-post chronology validated (topic.created_at <= post.created_at)")
+    print("Strict topic-post chronology validated (topic.created_at <= post.created_at)")
 
-    print("\n🎉 All validations passed!")
+    print("\nAll validations passed!")
 
 
 # ─── Task 4: load_to_postgres ────────────────────────────────────────────────
@@ -510,63 +510,58 @@ def _load_to_postgres(**context):
     conn = hook.get_conn()
     cur = conn.cursor()
 
+    # Очищаем таблицы (idempotent)
+    cur.execute("TRUNCATE user_logs, posts, topics, forums, users CASCADE;")
+
+    # forums
+    forum = _load("forum.json")
+    cur.execute(
+        "INSERT INTO forums (id, slug, name, description, position) VALUES (%s,%s,%s,%s,%s)",
+        (forum["id"], forum["slug"], forum["name"], forum["description"], forum["position"]),
+    )
+
+    # users
+    users = _load("registered_users.json")
+    execute_values(cur,
+        "INSERT INTO users (id,username,email,display_name,status,joined_at) VALUES %s",
+        [(u["id"], u["username"], u["email"], u["display_name"], u["status"], u["joined_at"])
+         for u in users],
+    )
+
+    # topics
+    topics = _load("topics.json")
+    execute_values(cur,
+        "INSERT INTO topics (id,forum_id,author_id,slug,title,status,created_at,last_post_at) VALUES %s",
+        [(t["id"], t["forum_id"], t["author_id"], t["slug"], t["title"],
+          t["status"], t["created_at"], t["last_post_at"]) for t in topics],
+    )
+
+    # posts
+    posts = _load("posts.json")
+    execute_values(cur,
+        "INSERT INTO posts (id,topic_id,author_id,author_guest_name,body,created_at) VALUES %s",
+        [(p["id"], p["topic_id"], p["author_id"], p["author_guest_name"],
+          p["body"], p["created_at"]) for p in posts],
+    )
+
+    # user_logs
+    logs = _load("logs.json")
+    execute_values(cur,
+        """INSERT INTO user_logs
+           (id,user_id,session_or_ip,action_type,description,
+            target_object_id,response_status,response_code,created_at) VALUES %s""",
+        [(l["id"], l["user_id"], l["session_or_ip"], l["action_type"],
+          l["description"], l["target_object_id"], l["response_status"],
+          l["response_code"], l["created_at"]) for l in logs],
+    )
+
     try:
-        # Очищаем таблицы (idempotent)
-        cur.execute("TRUNCATE user_logs, posts, topics, forums, users CASCADE;")
-
-        # forums
-        forum = _load("forum.json")
-        cur.execute(
-            "INSERT INTO forums (id, slug, name, description, position) VALUES (%s,%s,%s,%s,%s)",
-            (forum["id"], forum["slug"], forum["name"], forum["description"], forum["position"]),
-        )
-
-        # users
-        users = _load("registered_users.json")
-        execute_values(cur,
-            "INSERT INTO users (id,username,email,display_name,status,joined_at) VALUES %s",
-            [(u["id"], u["username"], u["email"], u["display_name"], u["status"], u["joined_at"])
-             for u in users],
-        )
-
-        # topics
-        topics = _load("topics.json")
-        execute_values(cur,
-            "INSERT INTO topics (id,forum_id,author_id,slug,title,status,created_at,last_post_at) VALUES %s",
-            [(t["id"], t["forum_id"], t["author_id"], t["slug"], t["title"],
-              t["status"], t["created_at"], t["last_post_at"]) for t in topics],
-        )
-
-        # posts
-        posts = _load("posts.json")
-        execute_values(cur,
-            "INSERT INTO posts (id,topic_id,author_id,author_guest_name,body,created_at) VALUES %s",
-            [(p["id"], p["topic_id"], p["author_id"], p["author_guest_name"],
-              p["body"], p["created_at"]) for p in posts],
-        )
-
-        # user_logs
-        logs = _load("logs.json")
-        execute_values(cur,
-            """INSERT INTO user_logs
-               (id,user_id,session_or_ip,action_type,description,
-                target_object_id,response_status,response_code,created_at) VALUES %s""",
-            [(l["id"], l["user_id"], l["session_or_ip"], l["action_type"],
-              l["description"], l["target_object_id"], l["response_status"],
-              l["response_code"], l["created_at"]) for l in logs],
-        )
-
         conn.commit()
-        print(f"✅ Loaded: {len(users)} users, {len(topics)} topics, "
+        print(f"Loaded: {len(users)} users, {len(topics)} topics, "
               f"{len(posts)} posts, {len(logs)} logs")
-
-    except Exception as e:
-        conn.rollback()
-        raise
     finally:
         cur.close()
         conn.close()
-
 
 # ─── DAG definition ─────────────────────────────────────────────────────────
 

@@ -20,4 +20,4 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname farpost <<-EOSQL
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO forum;
 EOSQL
 
-echo "✅ Forum database initialized successfully"
+echo "Forum database initialized successfully"
