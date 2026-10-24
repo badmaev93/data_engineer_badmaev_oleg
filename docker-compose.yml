@@ -23,6 +23,8 @@ services:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
+      FORUM_DB_USER: ${FORUM_DB_USER:-forum}
+      FORUM_DB_PASSWORD: ${FORUM_DB_PASSWORD:-forum}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
