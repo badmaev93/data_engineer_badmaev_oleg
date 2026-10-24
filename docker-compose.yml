@@ -42,7 +42,8 @@ services:
         mkdir -p /opt/airflow/logs /opt/airflow/output &&
         airflow db migrate &&
         airflow users create
-          --username admin --password admin
+          --username "$${_AIRFLOW_WWW_USER_USERNAME:-admin}"
+          --password "$${_AIRFLOW_WWW_USER_PASSWORD:-admin}"
           --firstname Admin --lastname Admin
           --role Admin --email admin@admin.com &&
         airflow connections add forum_db
