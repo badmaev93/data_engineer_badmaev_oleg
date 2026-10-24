@@ -103,6 +103,245 @@ def _generate_users(**context):
 
 # ─── Task 2: generate_logs ──────────────────────────────────────────────────
 
+
+def _gen_first_visit(base, logs):
+    for _ in range(random.randint(5, 15)):
+        ts = base + timedelta(seconds=random.randint(0, 86399))
+        logs.append(_log_entry(
+            None, "first_visit", "Первый заход на форум",
+            None, "success", 200, ts,
+        ))
+
+def _gen_register(base, users_pool, pool_idx, days_in_month, day_num, registered, today_registered, session_bounds, logs):
+    remaining_days = days_in_month - day_num
+    remaining_users = len(users_pool) - pool_idx
+    max_today = remaining_users - remaining_days * 5
+    n_reg = max(5, min(random.randint(5, 8), max_today))
+
+    for _ in range(n_reg):
+        if pool_idx >= len(users_pool):
+            break
+        u = users_pool[pool_idx]
+        pool_idx += 1
+        reg_ts = base + timedelta(seconds=random.randint(60, 25200))
+        u["joined_at"] = reg_ts.isoformat()
+        registered.append(u)
+        today_registered.append(u)
+
+        logs.append(_log_entry(
+            u["id"], "register",
+            f"Пользователь {u['username']} зарегистрировался",
+            None, "success", 201, reg_ts,
+        ))
+
+        login_ts = reg_ts + timedelta(seconds=random.randint(1, 30))
+        session_dur = random.randint(7200, 28800)
+        logout_ts = min(login_ts + timedelta(seconds=session_dur), base + timedelta(hours=23, minutes=55))
+        session_bounds[u["id"]] = (login_ts, logout_ts)
+
+        logs.append(_log_entry(
+            u["id"], "login",
+            f"Пользователь {u['username']} вошёл (после регистрации)",
+            None, "success", 200, login_ts,
+        ))
+    return pool_idx
+
+def _gen_login(base, registered, yesterday_registered, session_bounds, logs):
+    d1_returns = []
+    if yesterday_registered:
+        n_d1 = max(1, min(len(yesterday_registered), random.randint(2, max(2, len(yesterday_registered) - 1))))
+        d1_returns = random.sample(yesterday_registered, n_d1)
+
+    other_candidates = [u for u in registered if u["id"] not in session_bounds and u not in d1_returns]
+    random.shuffle(other_candidates)
+
+    existing_logins = d1_returns + other_candidates[:random.randint(3, 7)]
+    for u in existing_logins:
+        login_ts = base + timedelta(seconds=random.randint(3600, 50400))
+        session_dur = random.randint(7200, 32400)
+        logout_ts = min(login_ts + timedelta(seconds=session_dur), base + timedelta(hours=23, minutes=55))
+        session_bounds[u["id"]] = (login_ts, logout_ts)
+
+        logs.append(_log_entry(
+            u["id"], "login",
+            f"Пользователь {u['username']} вошёл в систему",
+            None, "success", 200, login_ts,
+        ))
+
+def _gen_create_topic(forum, user_map, active_uids, session_bounds, topics, available_topics, topic_created_map, logs):
+    n_ct = random.randint(7, 12)
+    for _ in range(min(n_ct, len(active_uids))):
+        uid = random.choice(active_uids)
+        u = user_map[uid]
+        tid = str(uuid.uuid4())
+        li_ts, lo_ts = session_bounds[uid]
+        span = int((lo_ts - li_ts).total_seconds())
+        sec_offset = random.randint(30, max(31, int(span * 0.35)))
+        ts = li_ts + timedelta(seconds=sec_offset)
+
+        topic = {
+            "id": tid,
+            "forum_id": forum["id"],
+            "author_id": uid,
+            "slug": fake.slug()[:200],
+            "title": fake.sentence(nb_words=6)[:255],
+            "status": "open",
+            "created_at": ts.isoformat(),
+            "last_post_at": ts.isoformat(),
+        }
+        topics.append(topic)
+        available_topics.append(tid)
+        topic_created_map[tid] = ts
+
+        logs.append(_log_entry(
+            uid, "create_topic",
+            f"Создана тема «{topic['title']}»",
+            tid, "success", 201, ts,
+        ))
+
+def _gen_create_topic_error(base, logs):
+    for _ in range(random.randint(2, 5)):
+        ts = base + timedelta(seconds=random.randint(28800, 72000))
+        logs.append(_log_entry(
+            None, "create_topic",
+            "Попытка создать тему без авторизации — отклонено",
+            None, "error", 401, ts,
+        ))
+
+def _gen_create_post(base, user_map, active_uids, session_bounds, available_topics, topic_created_map, posts, logs):
+    n_post = random.randint(14, 24)
+    n_auth_posts = n_post // 2 + random.randint(0, 1)
+    for i in range(n_post):
+        if not available_topics:
+            break
+        tid = random.choice(available_topics)
+        t_created = topic_created_map[tid]
+        pid = str(uuid.uuid4())
+
+        if i < n_auth_posts and active_uids:
+            eligible_users = [
+                uid for uid in active_uids
+                if session_bounds[uid][1] > max(session_bounds[uid][0], t_created) + timedelta(seconds=30)
+            ]
+            if eligible_users:
+                uid = random.choice(eligible_users)
+                u = user_map[uid]
+                li_ts, lo_ts = session_bounds[uid]
+                start_sec = max(int((li_ts - base).total_seconds()), int((t_created - base).total_seconds())) + 10
+                end_sec = int((lo_ts - base).total_seconds()) - 10
+                post_sec = random.randint(start_sec, max(start_sec + 1, end_sec))
+                ts = base + timedelta(seconds=post_sec)
+
+                post = {
+                    "id": pid, "topic_id": tid,
+                    "author_id": uid, "author_guest_name": None,
+                    "body": fake.paragraph(nb_sentences=3),
+                    "created_at": ts.isoformat(),
+                }
+                desc = f"Пользователь {u['username']} написал сообщение"
+                posts.append(post)
+                logs.append(_log_entry(
+                    uid, "create_post", desc,
+                    pid, "success", 201, ts,
+                ))
+                continue
+
+        guest = fake.first_name()
+        t_sec = int((t_created - base).total_seconds())
+        start_sec = max(0, t_sec + 10)
+        post_sec = random.randint(start_sec, 86300)
+        ts = base + timedelta(seconds=post_sec)
+
+        post = {
+            "id": pid, "topic_id": tid,
+            "author_id": None, "author_guest_name": guest,
+            "body": fake.paragraph(nb_sentences=3),
+            "created_at": ts.isoformat(),
+        }
+        desc = f"Аноним «{guest}» написал сообщение"
+        posts.append(post)
+        logs.append(_log_entry(
+            None, "create_post", desc,
+            pid, "success", 201, ts,
+        ))
+
+def _gen_view_topic(base, active_uids, session_bounds, available_topics, topic_created_map, logs):
+    for _ in range(random.randint(8, 20)):
+        if not available_topics:
+            break
+        tid = random.choice(available_topics)
+        t_created = topic_created_map[tid]
+
+        if random.random() > 0.5 and active_uids:
+            eligible_users = [
+                uid for uid in active_uids
+                if session_bounds[uid][1] > max(session_bounds[uid][0], t_created) + timedelta(seconds=20)
+            ]
+            if eligible_users:
+                uid = random.choice(eligible_users)
+                li_ts, lo_ts = session_bounds[uid]
+                start_sec = max(int((li_ts - base).total_seconds()), int((t_created - base).total_seconds())) + 5
+                end_sec = int((lo_ts - base).total_seconds()) - 5
+                view_sec = random.randint(start_sec, max(start_sec + 1, end_sec))
+                ts = base + timedelta(seconds=view_sec)
+                logs.append(_log_entry(
+                    uid, "view_topic",
+                    f"Просмотр темы {tid[:8]}…",
+                    tid, "success", 200, ts,
+                ))
+                continue
+
+        t_sec = int((t_created - base).total_seconds())
+        start_sec = max(0, t_sec + 5)
+        ts = base + timedelta(seconds=random.randint(start_sec, 86300))
+        logs.append(_log_entry(
+            None, "view_topic",
+            f"Просмотр темы {tid[:8]}…",
+            tid, "success", 200, ts,
+        ))
+
+def _gen_delete_topic(base, active_uids, session_bounds, available_topics, topic_created_map, logs):
+    candidate_topics = [
+        tid for tid in available_topics
+        if any(session_bounds[u][1] > topic_created_map[tid] + timedelta(seconds=30) for u in active_uids)
+    ]
+    n_del = random.randint(5, min(7, len(candidate_topics))) if len(candidate_topics) >= 5 else len(candidate_topics)
+    topics_to_delete = random.sample(candidate_topics, n_del) if candidate_topics else []
+
+    for tid in topics_to_delete:
+        t_created = topic_created_map[tid]
+        eligible_users = [
+            uid for uid in active_uids
+            if session_bounds[uid][1] > max(session_bounds[uid][0], t_created) + timedelta(seconds=30)
+        ]
+        if eligible_users:
+            uid = random.choice(eligible_users)
+            li_ts, lo_ts = session_bounds[uid]
+            start_sec = max(int((li_ts - base).total_seconds()), int((t_created - base).total_seconds())) + 15
+            end_sec = int((lo_ts - base).total_seconds()) - 5
+            del_sec = random.randint(start_sec, max(start_sec + 1, end_sec))
+            ts = base + timedelta(seconds=del_sec)
+        else:
+            uid = random.choice(active_uids)
+            li_ts, lo_ts = session_bounds[uid]
+            ts = lo_ts - timedelta(seconds=random.randint(10, 60))
+
+        available_topics.remove(tid)
+        logs.append(_log_entry(
+            uid, "delete_topic",
+            f"Удаление темы {tid[:8]}…",
+            tid, "success", 200, ts,
+        ))
+
+def _gen_logout(user_map, session_bounds, logs):
+    for uid, (li_ts, lo_ts) in session_bounds.items():
+        u = user_map[uid]
+        logs.append(_log_entry(
+            uid, "logout",
+            f"Пользователь {u['username']} вышел",
+            None, "success", 200, lo_ts,
+        ))
+
 def _generate_logs(**context):
     """Генерирует лог-записи за каждый день месяца с рандомайзером."""
     params = context["params"]
@@ -130,256 +369,33 @@ def _generate_logs(**context):
         today_registered = []
 
         # ── 1. first_visit (анонимы, 5-15) ──────────────────────────────
-        for _ in range(random.randint(5, 15)):
-            ts = base + timedelta(seconds=random.randint(0, 86399))
-            logs.append(_log_entry(
-                None, "first_visit", "Первый заход на форум",
-                None, "success", 200, ts,
-            ))
+        _gen_first_visit(base, logs)
 
         # ── 2. register (новые пользователи, 5-8) ──────────────────────
-        remaining_days = days_in_month - day_num
-        remaining_users = len(users_pool) - pool_idx
-        max_today = remaining_users - remaining_days * 5
-        n_reg = max(5, min(random.randint(5, 8), max_today))
-
-        for _ in range(n_reg):
-            if pool_idx >= len(users_pool):
-                break
-            u = users_pool[pool_idx]
-            pool_idx += 1
-            # Регистрация утром: 00:01 - 07:00
-            reg_ts = base + timedelta(seconds=random.randint(60, 25200))
-            u["joined_at"] = reg_ts.isoformat()
-            registered.append(u)
-            today_registered.append(u)
-
-            logs.append(_log_entry(
-                u["id"], "register",
-                f"Пользователь {u['username']} зарегистрировался",
-                None, "success", 201, reg_ts,
-            ))
-
-            # Авто-логин через 1-30 сек после регистрации
-            login_ts = reg_ts + timedelta(seconds=random.randint(1, 30))
-            # Сессия длится от 2 до 8 часов, но заканчивается внутри дня (до 23:55)
-            session_dur = random.randint(7200, 28800)
-            logout_ts = min(login_ts + timedelta(seconds=session_dur), base + timedelta(hours=23, minutes=55))
-            session_bounds[u["id"]] = (login_ts, logout_ts)
-
-            logs.append(_log_entry(
-                u["id"], "login",
-                f"Пользователь {u['username']} вошёл (после регистрации)",
-                None, "success", 200, login_ts,
-            ))
+        pool_idx = _gen_register(base, users_pool, pool_idx, days_in_month, day_num, registered, today_registered, session_bounds, logs)
 
         # ── 3. login (ранее зарегистрированные пользователи) ────────────
-        # Гарантируем возврат пользователей вчерашней когорты для ненулевого D1 retention
-        d1_returns = []
-        if yesterday_registered:
-            # 40-70% вчерашних возвращаются сегодня
-            n_d1 = max(1, min(len(yesterday_registered), random.randint(2, max(2, len(yesterday_registered) - 1))))
-            d1_returns = random.sample(yesterday_registered, n_d1)
-
-        other_candidates = [u for u in registered if u["id"] not in session_bounds and u not in d1_returns]
-        random.shuffle(other_candidates)
-
-        # Всего существующих залогинившихся: d1_returns + часть других кандидатов
-        existing_logins = d1_returns + other_candidates[:random.randint(3, 7)]
-        for u in existing_logins:
-            # Логин в интервале 01:00 - 14:00
-            login_ts = base + timedelta(seconds=random.randint(3600, 50400))
-            session_dur = random.randint(7200, 32400)  # 2 - 9 часов
-            logout_ts = min(login_ts + timedelta(seconds=session_dur), base + timedelta(hours=23, minutes=55))
-            session_bounds[u["id"]] = (login_ts, logout_ts)
-
-            logs.append(_log_entry(
-                u["id"], "login",
-                f"Пользователь {u['username']} вошёл в систему",
-                None, "success", 200, login_ts,
-            ))
+        _gen_login(base, registered, yesterday_registered, session_bounds, logs)
 
         active_uids = list(session_bounds.keys())
 
         # ── 4. create_topic (success, 7-12) ─────────────────────────────
-        # Создаём с запасом (7-12), чтобы после удаления min 5 всегда оставались темы для постов
-        n_ct = random.randint(7, 12)
-        for _ in range(min(n_ct, len(active_uids))):
-            uid = random.choice(active_uids)
-            u = user_map[uid]
-            tid = str(uuid.uuid4())
-            li_ts, lo_ts = session_bounds[uid]
-            span = int((lo_ts - li_ts).total_seconds())
-            # Создаём тему в первой трети сессии (30 сек .. 35% длины сессии)
-            sec_offset = random.randint(30, max(31, int(span * 0.35)))
-            ts = li_ts + timedelta(seconds=sec_offset)
-
-            topic = {
-                "id": tid,
-                "forum_id": forum["id"],
-                "author_id": uid,
-                "slug": fake.slug()[:200],
-                "title": fake.sentence(nb_words=6)[:255],
-                "status": "open",
-                "created_at": ts.isoformat(),
-                "last_post_at": ts.isoformat(),
-            }
-            topics.append(topic)
-            available_topics.append(tid)
-            topic_created_map[tid] = ts
-
-            logs.append(_log_entry(
-                uid, "create_topic",
-                f"Создана тема «{topic['title']}»",
-                tid, "success", 201, ts,
-            ))
+        _gen_create_topic(forum, user_map, active_uids, session_bounds, topics, available_topics, topic_created_map, logs)
 
         # ── 5. create_topic (error — без логина, мин. 2, 2-5 в день) ─────
-        for _ in range(random.randint(2, 5)):
-            ts = base + timedelta(seconds=random.randint(28800, 72000))
-            logs.append(_log_entry(
-                None, "create_topic",
-                "Попытка создать тему без авторизации — отклонено",
-                None, "error", 401, ts,
-            ))
+        _gen_create_topic_error(base, logs)
 
         # ── 6. create_post (~50/50 авторизованные / анонимы, 14-24) ──────
-        n_post = random.randint(14, 24)
-        n_auth_posts = n_post // 2 + random.randint(0, 1)
-        for i in range(n_post):
-            if not available_topics:
-                break
-            tid = random.choice(available_topics)
-            t_created = topic_created_map[tid]
-            pid = str(uuid.uuid4())
-
-            if i < n_auth_posts and active_uids:
-                # Находим пользователя, чья сессия перекрывается со временем после создания темы
-                eligible_users = [
-                    uid for uid in active_uids
-                    if session_bounds[uid][1] > max(session_bounds[uid][0], t_created) + timedelta(seconds=30)
-                ]
-                if eligible_users:
-                    uid = random.choice(eligible_users)
-                    u = user_map[uid]
-                    li_ts, lo_ts = session_bounds[uid]
-                    start_sec = max(int((li_ts - base).total_seconds()), int((t_created - base).total_seconds())) + 10
-                    end_sec = int((lo_ts - base).total_seconds()) - 10
-                    post_sec = random.randint(start_sec, max(start_sec + 1, end_sec))
-                    ts = base + timedelta(seconds=post_sec)
-
-                    post = {
-                        "id": pid, "topic_id": tid,
-                        "author_id": uid, "author_guest_name": None,
-                        "body": fake.paragraph(nb_sentences=3),
-                        "created_at": ts.isoformat(),
-                    }
-                    desc = f"Пользователь {u['username']} написал сообщение"
-                    posts.append(post)
-                    logs.append(_log_entry(
-                        uid, "create_post", desc,
-                        pid, "success", 201, ts,
-                    ))
-                    continue
-
-            # Иначе — анонимный пост
-            guest = fake.first_name()
-            t_sec = int((t_created - base).total_seconds())
-            start_sec = max(0, t_sec + 10)
-            post_sec = random.randint(start_sec, 86300)
-            ts = base + timedelta(seconds=post_sec)
-
-            post = {
-                "id": pid, "topic_id": tid,
-                "author_id": None, "author_guest_name": guest,
-                "body": fake.paragraph(nb_sentences=3),
-                "created_at": ts.isoformat(),
-            }
-            desc = f"Аноним «{guest}» написал сообщение"
-            posts.append(post)
-            logs.append(_log_entry(
-                None, "create_post", desc,
-                pid, "success", 201, ts,
-            ))
+        _gen_create_post(base, user_map, active_uids, session_bounds, available_topics, topic_created_map, posts, logs)
 
         # ── 7. view_topic (8-20 действий) ───────────────────────────────
-        for _ in range(random.randint(8, 20)):
-            if not available_topics:
-                break
-            tid = random.choice(available_topics)
-            t_created = topic_created_map[tid]
-
-            # 50% просмотров от залогиненных пользователей, 50% от анонимов
-            if random.random() > 0.5 and active_uids:
-                eligible_users = [
-                    uid for uid in active_uids
-                    if session_bounds[uid][1] > max(session_bounds[uid][0], t_created) + timedelta(seconds=20)
-                ]
-                if eligible_users:
-                    uid = random.choice(eligible_users)
-                    li_ts, lo_ts = session_bounds[uid]
-                    start_sec = max(int((li_ts - base).total_seconds()), int((t_created - base).total_seconds())) + 5
-                    end_sec = int((lo_ts - base).total_seconds()) - 5
-                    view_sec = random.randint(start_sec, max(start_sec + 1, end_sec))
-                    ts = base + timedelta(seconds=view_sec)
-                    logs.append(_log_entry(
-                        uid, "view_topic",
-                        f"Просмотр темы {tid[:8]}…",
-                        tid, "success", 200, ts,
-                    ))
-                    continue
-
-            # Анонимный просмотр
-            t_sec = int((t_created - base).total_seconds())
-            start_sec = max(0, t_sec + 5)
-            ts = base + timedelta(seconds=random.randint(start_sec, 86300))
-            logs.append(_log_entry(
-                None, "view_topic",
-                f"Просмотр темы {tid[:8]}…",
-                tid, "success", 200, ts,
-            ))
+        _gen_view_topic(base, active_uids, session_bounds, available_topics, topic_created_map, logs)
 
         # ── 8. delete_topic (мин. 5, 5-7 в день) ─────────────────────────
-        candidate_topics = [
-            tid for tid in available_topics
-            if any(session_bounds[u][1] > topic_created_map[tid] + timedelta(seconds=30) for u in active_uids)
-        ]
-        n_del = random.randint(5, min(7, len(candidate_topics))) if len(candidate_topics) >= 5 else len(candidate_topics)
-        topics_to_delete = random.sample(candidate_topics, n_del) if candidate_topics else []
-
-        for tid in topics_to_delete:
-            t_created = topic_created_map[tid]
-            eligible_users = [
-                uid for uid in active_uids
-                if session_bounds[uid][1] > max(session_bounds[uid][0], t_created) + timedelta(seconds=30)
-            ]
-            if eligible_users:
-                uid = random.choice(eligible_users)
-                li_ts, lo_ts = session_bounds[uid]
-                start_sec = max(int((li_ts - base).total_seconds()), int((t_created - base).total_seconds())) + 15
-                end_sec = int((lo_ts - base).total_seconds()) - 5
-                del_sec = random.randint(start_sec, max(start_sec + 1, end_sec))
-                ts = base + timedelta(seconds=del_sec)
-            else:
-                uid = random.choice(active_uids)
-                li_ts, lo_ts = session_bounds[uid]
-                ts = lo_ts - timedelta(seconds=random.randint(10, 60))
-
-            available_topics.remove(tid)
-            logs.append(_log_entry(
-                uid, "delete_topic",
-                f"Удаление темы {tid[:8]}…",
-                tid, "success", 200, ts,
-            ))
+        _gen_delete_topic(base, active_uids, session_bounds, available_topics, topic_created_map, logs)
 
         # ── 9. logout (все залогиненные пользователи завершают сессию) ───
-        for uid, (li_ts, lo_ts) in session_bounds.items():
-            u = user_map[uid]
-            logs.append(_log_entry(
-                uid, "logout",
-                f"Пользователь {u['username']} вышел",
-                None, "success", 200, lo_ts,
-            ))
+        _gen_logout(user_map, session_bounds, logs)
 
         yesterday_registered = today_registered
 
