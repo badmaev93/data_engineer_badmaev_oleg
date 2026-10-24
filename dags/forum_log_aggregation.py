@@ -109,7 +109,7 @@ def _extract_raw_logs(**context):
     df.to_parquet(path, index=False)
 
     print(
-        f"✅ Extracted {len(df)} rows for {ext_from} .. {date_to} (target: {date_from} .. {date_to})"
+        f"Extracted {len(df)} rows for {ext_from} .. {date_to} (target: {date_from} .. {date_to})"
     )
 
 
@@ -155,7 +155,7 @@ def _validate_data(**context):
         ok_topics["user_id"].notna().all()
     ), "Found successful create_topic without user_id"
 
-    print("✅ Data validation passed")
+    print("Data validation passed")
 
 
 # ─── Task: transform_aggregates ─────────────────────────────────────────────
@@ -264,7 +264,7 @@ def _transform_aggregates(**context):
 
     result = pd.DataFrame(rows)
     result.to_parquet(os.path.join(TMP_DIR, "aggregates.parquet"), index=False)
-    print(f"✅ Aggregated {len(result)} day(s)")
+    print(f"Aggregated {len(result)} day(s)")
     print(result.to_string(index=False))
 
 
@@ -285,7 +285,7 @@ def _export_to_csv(**context):
     path = os.path.join(OUTPUT_DIR, filename)
     result.to_csv(path, index=False)
 
-    print(f"✅ Exported to {path}")
+    print(f"Exported to {path}")
 
 
 # ─── Task: alert_on_anomaly ─────────────────────────────────────────────────
@@ -300,31 +300,31 @@ def _alert_on_anomaly(**context):
         day = row["day"]
 
         if row["anon_messages_pct"] > 80:
-            print(f"⚠️  [{day}] anon_messages_pct = {row['anon_messages_pct']}% (> 80%)")
+            print(f"[{day}] anon_messages_pct = {row['anon_messages_pct']}% (> 80%)")
             warnings_found = True
 
         if row["total_messages"] == 0:
-            print(f"⚠️  [{day}] total_messages = 0")
+            print(f"[{day}] total_messages = 0")
             warnings_found = True
 
         if row["new_accounts"] == 0:
-            print(f"⚠️  [{day}] new_accounts = 0")
+            print(f"[{day}] new_accounts = 0")
             warnings_found = True
 
         if row["avg_session_duration_sec"] is not None and row["avg_session_duration_sec"] < 10:
-            print(f"⚠️  [{day}] avg_session_duration = {row['avg_session_duration_sec']}s (< 10s)")
+            print(f"[{day}] avg_session_duration = {row['avg_session_duration_sec']}s (< 10s)")
             warnings_found = True
 
         if row["topics_growth_pct"] is not None and abs(row["topics_growth_pct"]) > 200:
-            print(f"⚠️  [{day}] topics_growth_pct = {row['topics_growth_pct']}% (|x| > 200%)")
+            print(f"[{day}] topics_growth_pct = {row['topics_growth_pct']}% (|x| > 200%)")
             warnings_found = True
 
         if row["d1_retention_pct"] is not None and row["d1_retention_pct"] < 5:
-            print(f"⚠️  [{day}] d1_retention_pct = {row['d1_retention_pct']}% (< 5%)")
+            print(f"[{day}] d1_retention_pct = {row['d1_retention_pct']}% (< 5%)")
             warnings_found = True
 
     if not warnings_found:
-        print("✅ No anomalies detected")
+        print("No anomalies detected")
 
 
 # ─── DAG definition ─────────────────────────────────────────────────────────
