@@ -1,0 +1,9 @@
+logs/
+output/*.csv
+__pycache__/
+*.pyc
+.env
+pgdata/
+.pytest_cache/
+.DS_Store
+
