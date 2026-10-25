@@ -1,11 +1,16 @@
 #!/bin/bash
 set -e
 
+if [ -z "$FORUM_DB_USER" ] || [ -z "$FORUM_DB_PASSWORD" ]; then
+    echo "ERROR: FORUM_DB_USER and FORUM_DB_PASSWORD environment variables must be set."
+    exit 1
+fi
+
 # Создаем пользователя forum и базу данных farpost
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
-    CREATE USER ${FORUM_DB_USER:-forum} WITH PASSWORD '${FORUM_DB_PASSWORD:-forum}';
-    CREATE DATABASE farpost OWNER ${FORUM_DB_USER:-forum};
-    GRANT ALL PRIVILEGES ON DATABASE farpost TO ${FORUM_DB_USER:-forum};
+    CREATE USER "$FORUM_DB_USER" WITH PASSWORD '$FORUM_DB_PASSWORD';
+    CREATE DATABASE farpost OWNER "$FORUM_DB_USER";
+    GRANT ALL PRIVILEGES ON DATABASE farpost TO "$FORUM_DB_USER";
 EOSQL
 
 # Применяем схему forum
@@ -13,11 +18,11 @@ psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname farpost -f /schema.
 
 # Выдаем права пользователю forum
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname farpost <<-EOSQL
-    GRANT ALL ON ALL TABLES IN SCHEMA public TO ${FORUM_DB_USER:-forum};
-    GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO ${FORUM_DB_USER:-forum};
-    GRANT USAGE ON SCHEMA public TO ${FORUM_DB_USER:-forum};
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${FORUM_DB_USER:-forum};
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${FORUM_DB_USER:-forum};
+    GRANT ALL ON ALL TABLES IN SCHEMA public TO "$FORUM_DB_USER";
+    GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "$FORUM_DB_USER";
+    GRANT USAGE ON SCHEMA public TO "$FORUM_DB_USER";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO "$FORUM_DB_USER";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO "$FORUM_DB_USER";
 EOSQL
 
 echo "База данных forum успешно инициализирована"
