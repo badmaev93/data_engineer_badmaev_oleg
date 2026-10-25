@@ -22,8 +22,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-airflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
       POSTGRES_DB: ${POSTGRES_DB:-airflow}
-      FORUM_DB_USER: ${FORUM_DB_USER:-forum}
-      FORUM_DB_PASSWORD: ${FORUM_DB_PASSWORD:-forum}
+      FORUM_DB_USER: ${FORUM_DB_USER}
+      FORUM_DB_PASSWORD: ${FORUM_DB_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
@@ -52,8 +52,8 @@ services:
           --conn-host postgres
           --conn-port 5432
           --conn-schema fp
-          --conn-login ${FORUM_DB_USER:-forum}
-          --conn-password ${FORUM_DB_PASSWORD:-forum} || true
+          --conn-login ${FORUM_DB_USER}
+          --conn-password ${FORUM_DB_PASSWORD} || true
       "
     restart: "no"
 
