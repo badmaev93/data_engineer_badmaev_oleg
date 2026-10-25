@@ -2,7 +2,7 @@
 set -e
 
 if [ -z "$FORUM_DB_USER" ] || [ -z "$FORUM_DB_PASSWORD" ]; then
-    echo "ERROR: FORUM_DB_USER and FORUM_DB_PASSWORD environment variables must be set."
+    echo "ОШИБКА: Переменные окружения FORUM_DB_USER и FORUM_DB_PASSWORD должны быть заданы."
     exit 1
 fi
 

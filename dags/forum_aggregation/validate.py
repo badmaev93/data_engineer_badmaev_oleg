@@ -15,7 +15,7 @@ def _validate_data(**context):
     df = pd.read_parquet(in_path)
 
     if df.empty:
-        print("Data is empty, nothing to validate.")
+        print("Данные пусты, нечего валидировать.")
         return
 
     schema = DataFrameSchema({
@@ -38,6 +38,6 @@ def _validate_data(**context):
     ]
     assert (
         ok_topics["user_id"].notna().all()
-    ), "Found successful create_topic without user_id"
+    ), "Найден успешный create_topic без user_id"
 
-    print("Data validation passed")
+    print("Валидация данных пройдена")
