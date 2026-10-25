@@ -298,31 +298,31 @@ def _alert_on_anomaly(**context):
 
     warnings_found = False
 
-    for _, row in result.iterrows():
-        day = row["day"]
+    for row in result.itertuples(index=False):
+        day = row.day
 
-        if row["anon_messages_pct"] > 80:
-            print(f"[{day}] anon_messages_pct = {row['anon_messages_pct']}% (> 80%)")
+        if row.anon_messages_pct > 80:
+            print(f"[{day}] anon_messages_pct = {row.anon_messages_pct}% (> 80%)")
             warnings_found = True
 
-        if row["total_messages"] == 0:
+        if row.total_messages == 0:
             print(f"[{day}] total_messages = 0")
             warnings_found = True
 
-        if row["new_accounts"] == 0:
+        if row.new_accounts == 0:
             print(f"[{day}] new_accounts = 0")
             warnings_found = True
 
-        if row["avg_session_duration_sec"] is not None and row["avg_session_duration_sec"] < 10:
-            print(f"[{day}] avg_session_duration = {row['avg_session_duration_sec']}s (< 10s)")
+        if pd.notna(row.avg_session_duration_sec) and row.avg_session_duration_sec < 10:
+            print(f"[{day}] avg_session_duration = {row.avg_session_duration_sec}s (< 10s)")
             warnings_found = True
 
-        if row["topics_growth_pct"] is not None and abs(row["topics_growth_pct"]) > 200:
-            print(f"[{day}] topics_growth_pct = {row['topics_growth_pct']}% (|x| > 200%)")
+        if pd.notna(row.topics_growth_pct) and abs(row.topics_growth_pct) > 200:
+            print(f"[{day}] topics_growth_pct = {row.topics_growth_pct}% (|x| > 200%)")
             warnings_found = True
 
-        if row["d1_retention_pct"] is not None and row["d1_retention_pct"] < 5:
-            print(f"[{day}] d1_retention_pct = {row['d1_retention_pct']}% (< 5%)")
+        if pd.notna(row.d1_retention_pct) and row.d1_retention_pct < 5:
+            print(f"[{day}] d1_retention_pct = {row.d1_retention_pct}% (< 5%)")
             warnings_found = True
 
     if not warnings_found:
