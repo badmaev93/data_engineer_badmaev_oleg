@@ -25,4 +25,4 @@ def _transform_aggregates(**context):
 
     result = pd.DataFrame(rows)
     result.to_parquet(os.path.join(TMP_DIR, "aggregates.parquet"), index=False)
-    logging.getLogger(__name__).info("Aggregated %d day(s)", len(result))
+    logging.getLogger(__name__).info("Агрегировано %d дней", len(result))

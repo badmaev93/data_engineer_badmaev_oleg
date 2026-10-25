@@ -30,4 +30,4 @@ def _extract_raw_logs(**context):
         df = pd.DataFrame(columns=cols)
 
     df.to_parquet(out_path, index=False)
-    print(f"Extracted {len(df)} rows to {out_path}")
+    print(f"Извлечено {len(df)} строк в {out_path}")

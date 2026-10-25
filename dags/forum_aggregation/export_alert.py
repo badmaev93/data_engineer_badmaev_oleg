@@ -17,7 +17,7 @@ def _export_to_csv(**context):
     path = os.path.join(OUTPUT_DIR, filename)
     result.to_csv(path, index=False)
 
-    logging.getLogger(__name__).info("Exported to %s", path)
+    logging.getLogger(__name__).info("Экспортировано в %s", path)
 
 def _alert_on_anomaly(**context):
     """Логирует предупреждения при аномальных значениях метрик."""
@@ -54,4 +54,4 @@ def _alert_on_anomaly(**context):
             warnings_found = True
 
     if not warnings_found:
-        logger.info("No anomalies detected.")
+        logger.info("Аномалии не обнаружены.")
