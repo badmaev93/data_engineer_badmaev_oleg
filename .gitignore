@@ -6,3 +6,4 @@ pgdata/
 .pytest_cache/
 .DS_Store
 
+.jules/
