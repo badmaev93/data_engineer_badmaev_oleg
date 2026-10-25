@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 import os
 from datetime import datetime, timedelta
@@ -38,7 +39,6 @@ def _calc_avg_session_duration(success_df):
 
     durations = []
 
-    # Optimize by sorting once and grouping, avoiding O(N^2) dataframe filtering in a loop
     l_sorted = logins.sort_values(["user_id", "created_at"])
     lo_sorted = logouts.sort_values(["user_id", "created_at"])
 
@@ -110,5 +110,4 @@ def _transform_aggregates(**context):
 
     result = pd.DataFrame(rows)
     result.to_parquet(os.path.join(TMP_DIR, "aggregates.parquet"), index=False)
-    print(f"Aggregated {len(result)} day(s)")
-    print(result.to_string(index=False))
+    logging.getLogger(__name__).info("Aggregated %d day(s)\n%s", len(result), result.to_string(index=False))

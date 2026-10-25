@@ -25,7 +25,8 @@ def _validate_data(**context):
         "response_status": Column(str, Check.isin(["success", "error"]), nullable=False),
         "response_code": Column(int, Check.in_range(100, 599), nullable=False),
         # coerce=True для безопасного парсинга дат из разных форматов/типов БД
-        "created_at": Column("datetime64[ns]", coerce=True, nullable=False),
+        "description": Column(str, nullable=False),
+        "created_at": Column("datetime64[ns, UTC]", coerce=True, nullable=False),
     })
 
     schema.validate(df, lazy=True)
