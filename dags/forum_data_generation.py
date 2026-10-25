@@ -16,7 +16,6 @@ from calendar import monthrange
 from datetime import datetime, timedelta
 
 import pandas as pd
-import pandera as pa
 from pandera import Column, Check, DataFrameSchema
 from faker import Faker
 
