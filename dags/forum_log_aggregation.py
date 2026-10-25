@@ -15,7 +15,6 @@ import os
 from datetime import datetime, timedelta
 
 import pandas as pd
-import pandera as pa
 from pandera import Column, Check, DataFrameSchema
 
 from airflow import DAG
