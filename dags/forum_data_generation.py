@@ -426,9 +426,9 @@ def _validate_generated_data(**context):
     df_auth = df[df["user_id"].notna()].copy()
     df_auth["ts"] = pd.to_datetime(df_auth["created_at"])
     df_auth["day"] = df_auth["ts"].dt.date
+    df_auth = df_auth.sort_values("ts")
 
-    for (day, uid), u_df in df_auth.groupby(["day", "user_id"]):
-        u_actions = u_df.sort_values("ts")
+    for (day, uid), u_actions in df_auth.groupby(["day", "user_id"]):
         logins = u_actions[u_actions["action_type"] == "login"]["ts"].tolist()
         logouts = u_actions[u_actions["action_type"] == "logout"]["ts"].tolist()
 
