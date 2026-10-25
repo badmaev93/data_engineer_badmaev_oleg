@@ -51,7 +51,7 @@ services:
           --conn-type postgres
           --conn-host postgres
           --conn-port 5432
-          --conn-schema farpost
+          --conn-schema fp
           --conn-login ${FORUM_DB_USER:-forum}
           --conn-password ${FORUM_DB_PASSWORD:-forum} || true
       "

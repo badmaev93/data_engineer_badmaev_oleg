@@ -14,7 +14,7 @@ docker-compose up --build
 
 После запуска:
 - **Airflow UI**: [http://localhost:8080](http://localhost:8080) (логин `admin` / пароль `admin`)
-- **PostgreSQL**: `localhost:5433`, пользователь `forum`, пароль `forum`, база `farpost`
+- **PostgreSQL**: `localhost:5433`, пользователь `forum`, пароль `forum`, база `fp`
 
 ### Порядок работы
 
@@ -32,13 +32,13 @@ docker-compose up --build
 ## Структура проекта
 
 ```
-farpost/
+fp/
 ├── docker-compose.yml            # PostgreSQL + Airflow (webserver, scheduler, init)
 ├── Dockerfile                    # Образ Airflow с доп. пакетами (pandera, pyarrow, faker)
 ├── requirements.txt              # faker, pandera, pyarrow, postgres-provider
 ├── schema.sql                    # DDL схемы форумной БД (партиционирование, индексы)
 ├── init-db/
-│   └── 01-init-forum-db.sh      # Инициализация БД farpost при первом запуске
+│   └── 01-init-forum-db.sh      # Инициализация БД fp при первом запуске
 ├── dags/
 │   ├── forum_generation/         # Пакет с логикой генерации данных
 │   ├── forum_aggregation/        # Пакет с логикой агрегации данных
