@@ -20,7 +20,6 @@ import shutil
 import sys
 import tempfile
 from contextlib import redirect_stdout
-from datetime import date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
