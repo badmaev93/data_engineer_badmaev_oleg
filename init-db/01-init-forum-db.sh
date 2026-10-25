@@ -6,18 +6,18 @@ if [ -z "$FORUM_DB_USER" ] || [ -z "$FORUM_DB_PASSWORD" ]; then
     exit 1
 fi
 
-# Создаем пользователя forum и базу данных farpost
+# Создаем пользователя forum и базу данных fp
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
     CREATE USER "$FORUM_DB_USER" WITH PASSWORD '$FORUM_DB_PASSWORD';
-    CREATE DATABASE farpost OWNER "$FORUM_DB_USER";
-    GRANT ALL PRIVILEGES ON DATABASE farpost TO "$FORUM_DB_USER";
+    CREATE DATABASE fp OWNER "$FORUM_DB_USER";
+    GRANT ALL PRIVILEGES ON DATABASE fp TO "$FORUM_DB_USER";
 EOSQL
 
 # Применяем схему forum
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname farpost -f /schema.sql
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname fp -f /schema.sql
 
 # Выдаем права пользователю forum
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname farpost <<-EOSQL
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname fp <<-EOSQL
     GRANT ALL ON ALL TABLES IN SCHEMA public TO "$FORUM_DB_USER";
     GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO "$FORUM_DB_USER";
     GRANT USAGE ON SCHEMA public TO "$FORUM_DB_USER";
