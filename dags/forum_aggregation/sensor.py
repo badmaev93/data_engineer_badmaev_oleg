@@ -1,6 +1,7 @@
 from airflow.sensors.base import BaseSensorOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
 from datetime import datetime
+from .helpers import _resolve_dates
 
 class DataAvailabilitySensor(BaseSensorOperator):
     """
@@ -11,16 +12,14 @@ class DataAvailabilitySensor(BaseSensorOperator):
         self.conn_id = conn_id
 
     def poke(self, context) -> bool:
-        ds = context.get("ds")
-        if not ds:
-            ds = datetime.now().strftime("%Y-%m-%d")
+        date_from, date_to = _resolve_dates(context)
 
         hook = PostgresHook(postgres_conn_id=self.conn_id)
-        sql = "SELECT 1 FROM user_logs WHERE DATE(created_at) = %s LIMIT 1"
-        records = hook.get_records(sql, parameters=(ds,))
+        sql = "SELECT 1 FROM user_logs WHERE created_at >= %s::timestamptz AND created_at < (%s::date + INTERVAL '1 day')::timestamptz LIMIT 1"
+        records = hook.get_records(sql, parameters=(date_from, date_to))
         if records and len(records) > 0:
-            self.log.info(f"Данные за {ds} найдены.")
+            self.log.info(f"Данные с {date_from} по {date_to} найдены.")
             return True
         else:
-            self.log.info(f"Данных за {ds} пока нет.")
+            self.log.info(f"Данных с {date_from} по {date_to} пока нет.")
             return False

@@ -10,7 +10,7 @@ Idempotent: можно перезапускать за любой день (ds).
   [export_to_csv, alert_on_anomaly]
 """
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -21,8 +21,6 @@ from forum_aggregation.validate import _validate_data
 from forum_aggregation.transform import _transform_aggregates
 from forum_aggregation.export_alert import _export_to_csv, _alert_on_anomaly
 from forum_aggregation.helpers import CONN_ID
-
-OUTPUT_DIR = "/app/output"
 
 default_args = {
     "owner": "airflow",
@@ -35,6 +33,8 @@ with DAG(
     default_args=default_args,
     description="Агрегация логов форума в ежедневные витрины",
     schedule="@daily",
+    start_date=datetime(2026, 10, 1),
+    params={"date_from": None, "date_to": None},
     catchup=False,
     tags=["forum", "aggregation"],
 ) as dag:
@@ -55,4 +55,4 @@ with DAG(
     t5_export = PythonOperator(task_id="export_to_csv", python_callable=_export_to_csv)
     t6_alert = PythonOperator(task_id="alert_on_anomaly", python_callable=_alert_on_anomaly)
 
-    t1_sensor >> t2_extract >> t3_validate >> t4_transform >> [t5_export, t6_alert]
+    t1_sensor >> t2_extract >> t3_validate >> t4_transform >> t5_export >> t6_alert
