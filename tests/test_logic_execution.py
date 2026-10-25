@@ -8,13 +8,10 @@
   cd farpost && python3 -m pytest tests/test_logic_execution.py -v --tb=short
 """
 
-import json
-import os
 import random
 import sys
 import tempfile
-from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -56,7 +53,6 @@ sys.modules["airflow.sensors.base"].BaseSensorOperator = type("BSO", (), {"__ini
 sys.modules["airflow.providers.postgres.hooks.postgres"].PostgresHook = _FakeModule
 
 # Теперь импортируем DAG-модуль
-import importlib
 import forum_data_generation as gen_mod
 
 # Переопределяем TMP_DIR
