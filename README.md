@@ -40,6 +40,8 @@ farpost/
 ├── init-db/
 │   └── 01-init-forum-db.sh      # Инициализация БД farpost при первом запуске
 ├── dags/
+│   ├── forum_generation/         # Пакет с логикой генерации данных
+│   ├── forum_aggregation/        # Пакет с логикой агрегации данных
 │   ├── forum_data_generation.py  # DAG 1: генерация данных с рандомайзером и сессиями
 │   └── forum_log_aggregation.py  # DAG 2: инкрементальная агрегация логов → CSV
 ├── output/                       # Результаты агрегации (CSV)
@@ -208,30 +210,3 @@ check_data_availability → extract_raw_logs → validate_data
 
 ---
 
-## Автоматизированные тесты
-
-В репозитории реализован полный тестовый сьют (**227 тестов**), проверяющий соответствие ТЗ на всех уровнях:
-
-1. **`tests/test_full_audit.py`** (149 тестов) — статический и структурный аудит:
-   - DDL схемы (`schema.sql`): типы, NOT NULL / nullable, ENUM из 8 действий, PARTITION BY RANGE по `created_at`, PK `(id, created_at)`, BRIN и partial B-tree индексы.
-   - Инфраструктура (`docker-compose.yml`, `Dockerfile`, `init-db/`): монтирование томов, сервисы, healthcheck, параметры подключения `forum_db`.
-   - Структура и контракты обоих DAG: порядок тасок, параметры, расписание, поддержка кастомных периодов и `@daily`.
-   - Соответствие README всем требованиям ТЗ.
-2. **`tests/test_logic_execution.py`** (43 теста) — прямое исполнение бизнес-логики генерации данных:
-   - Соблюдение порогов: $\ge 5$ действий каждого типа в день, $\ge 2$ ошибок `create_topic` (401, анонимы), баланс постов 30–70%.
-   - Строгая хронология сессий (`login < action < logout`) и зависимостей сущностей (`topic.created_at <= post.created_at`).
-   - Когортный D1 retention: гарантия возврата пользователей вчерашней когорты.
-3. **`tests/test_aggregation_execution.py`** (22 теста) — прямое исполнение логики агрегации:
-   - Проверка расчета всех 7 метрик (включая работу при `@daily` за 1 день со смещением -1 день).
-   - Pandera валидация и негативные сценарии (невалидные action_type, коды ответа, анонимные темы).
-   - Сенсор `DataAvailabilitySensor` (poke) и проверка отсутствия кастов `created_at::date` в SQL (Partition Pruning).
-   - Срабатывание и тишина алертов (`_alert_on_anomaly`).
-4. **`tests/test_e2e_pipeline.py`** (13 тестов) — End-to-End симуляция полного цикла:
-   - `DAG 1` $\rightarrow$ база данных $\rightarrow$ `DAG 2` $\rightarrow$ итоговый CSV файл.
-   - Проверка структуры CSV, типов данных и непустых значений метрик для месячного и ежедневного режимов.
-
-Запуск тестов:
-
-```bash
-pytest tests/ -v
-```
