@@ -3,7 +3,7 @@ x-airflow-common: &airflow-common
   user: "${AIRFLOW_UID:-50000}:0"
   environment: &airflow-env
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
-    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres:5432/${POSTGRES_DB:-airflow}
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
     AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "false"
@@ -19,11 +19,11 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-airflow}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow}
-      POSTGRES_DB: ${POSTGRES_DB:-airflow}
-      FORUM_DB_USER: ${FORUM_DB_USER:-forum}
-      FORUM_DB_PASSWORD: ${FORUM_DB_PASSWORD:-forum}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      FORUM_DB_USER: ${FORUM_DB_USER}
+      FORUM_DB_PASSWORD: ${FORUM_DB_PASSWORD}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
@@ -31,7 +31,7 @@ services:
     ports:
       - "5433:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-airflow}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       retries: 5
     restart: unless-stopped
@@ -44,7 +44,7 @@ services:
         mkdir -p /opt/airflow/logs /opt/airflow/output &&
         airflow db migrate &&
         airflow users create
-          --username ${AIRFLOW_ADMIN_USER:-admin} --password ${AIRFLOW_ADMIN_PASSWORD:-admin}
+          --username ${AIRFLOW_ADMIN_USER} --password ${AIRFLOW_ADMIN_PASSWORD}
           --firstname Admin --lastname Admin
           --role Admin --email admin@admin.com &&
         airflow connections add forum_db
@@ -52,8 +52,8 @@ services:
           --conn-host postgres
           --conn-port 5432
           --conn-schema farpost
-          --conn-login ${FORUM_DB_USER:-forum}
-          --conn-password ${FORUM_DB_PASSWORD:-forum} || true
+          --conn-login ${FORUM_DB_USER}
+          --conn-password ${FORUM_DB_PASSWORD} || true
       "
     restart: "no"
 
