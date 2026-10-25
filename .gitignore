@@ -7,3 +7,4 @@ pgdata/
 .DS_Store
 
 .jules/
+.env
