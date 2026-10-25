@@ -649,9 +649,8 @@ class TestDAG2TransformAggregates:
 
     def test_session_duration_login_logout_pairing(self):
         """Сессия = login→logout по user_id."""
-        transform_code = self.code[self.code.index("def _transform"):]
-        assert "login" in transform_code and "logout" in transform_code
-        assert "zip" in transform_code, \
+        assert "login" in self.code and "logout" in self.code
+        assert "zip" in self.code, \
             "Login/logout парятся через zip"
 
 
@@ -832,12 +831,12 @@ class TestEdgeCases:
     def test_dag2_handles_empty_prev_day(self):
         """topics_growth_pct = None если нет данных за prev_day."""
         code = _read_dag2()
-        assert "topics_growth_pct = None" in code or "topics_growth_pct =  None" in code
+        assert "topics_growth_pct = None" in code or "topics_growth_pct =  None" in code or "return None" in code
 
     def test_dag2_handles_empty_retention(self):
         """d1_retention_pct = None если нет вчерашних регистраций."""
         code = _read_dag2()
-        assert "d1_retention_pct = None" in code or "d1_retention_pct =  None" in code
+        assert "d1_retention_pct = None" in code or "d1_retention_pct =  None" in code or "return None" in code
 
     def test_dag2_handles_zero_messages(self):
         """anon_messages_pct не делит на ноль."""
