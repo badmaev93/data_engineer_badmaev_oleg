@@ -74,7 +74,9 @@ def _generate_users(**context):
     _, days_in_month = monthrange(year, month)
 
     # Гарантируем достаточно пользователей: 8/день * кол-во дней + запас
-    n_users = max(params.get("n_users", 250), days_in_month * 8 + 10)
+    n_users = params.get("n_users", 250)
+    if n_users > 0:
+        n_users = max(n_users, days_in_month * 8 + 10)
 
     fake.unique.clear()
     users = []

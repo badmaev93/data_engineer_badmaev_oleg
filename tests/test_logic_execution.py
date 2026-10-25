@@ -377,6 +377,26 @@ class TestResponseCodes:
 class TestUsersData:
     """Проверяет целостность данных пользователей."""
 
+    def test_zero_users(self):
+        """Test _generate_users with 0 users (edge case)"""
+        import tempfile
+        import shutil
+        import forum_data_generation as gen_mod
+
+        tmpdir = tempfile.mkdtemp()
+        old_tmp_dir = gen_mod.TMP_DIR
+        gen_mod.TMP_DIR = tmpdir
+
+        try:
+            context = {"params": {"year": 2026, "month": 10, "n_users": 0}}
+            gen_mod._generate_users(**context)
+            users = gen_mod._load("users_pool.json")
+            assert len(users) == 0, f"Expected 0 users, but got {len(users)}"
+        finally:
+            gen_mod.TMP_DIR = old_tmp_dir
+            shutil.rmtree(tmpdir)
+
+
     def test_all_user_ids_unique(self, generated_data):
         users = generated_data["users"]
         ids = [u["id"] for u in users]
