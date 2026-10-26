@@ -1,3 +1,5 @@
+name: fp
+
 x-airflow-common: &airflow-common
   build: .
   user: "${AIRFLOW_UID:-50000}:0"
@@ -39,23 +41,14 @@ services:
   airflow-init:
     <<: *airflow-common
     entrypoint: /bin/bash
-    command: >
-      -c "
-        mkdir -p /opt/airflow/logs /opt/airflow/output || true;
-        airflow db migrate &&
-        (airflow users create
-          --username $${AIRFLOW_ADMIN_USER:-admin} --password $${AIRFLOW_ADMIN_PASSWORD:-admin}
-          --firstname Admin --lastname Admin
-          --role Admin --email admin@admin.com || true) &&
-        (airflow connections delete forum_db || true) &&
-        (airflow connections add forum_db
-          --conn-type postgres
-          --conn-host postgres
-          --conn-port 5432
-          --conn-schema fp
-          --conn-login $${FORUM_DB_USER:-forum}
-          --conn-password $${FORUM_DB_PASSWORD:-forum} || true)
-      "
+    command:
+      - -c
+      - |
+        mkdir -p /opt/airflow/logs /opt/airflow/output || true
+        airflow db migrate
+        airflow users create --username ${AIRFLOW_ADMIN_USER:-admin} --password ${AIRFLOW_ADMIN_PASSWORD:-admin} --firstname Admin --lastname Admin --role Admin --email admin@admin.com || true
+        airflow connections delete forum_db || true
+        airflow connections add forum_db --conn-type postgres --conn-host postgres --conn-port 5432 --conn-schema fp --conn-login ${FORUM_DB_USER:-forum} --conn-password ${FORUM_DB_PASSWORD:-forum} || true
     restart: "no"
 
   airflow-webserver:
