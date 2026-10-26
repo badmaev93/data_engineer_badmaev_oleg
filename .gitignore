@@ -1,0 +1,13 @@
+logs/
+output/*.csv
+__pycache__/
+*.pyc
+pgdata/
+.pytest_cache/
+.DS_Store
+
+.jules/
+.env
+
+.idea/
+.vscode/
