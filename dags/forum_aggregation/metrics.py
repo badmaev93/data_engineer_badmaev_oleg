@@ -29,21 +29,26 @@ def calc_topics_growth(success_today_df, success_prev_df) -> float | None:
 
 
 def calc_avg_session_duration(success_df) -> float | None:
-    logins = success_df[success_df["action_type"] == "login"]
-    logouts = success_df[success_df["action_type"] == "logout"]
+    # Оптимизация: векторизованное вычисление продолжительности сессий
+    # вместо вложенных циклов по каждому пользователю
+    logins = success_df[success_df["action_type"] == "login"].dropna(subset=["user_id"]).copy()
+    logouts = success_df[success_df["action_type"] == "logout"].dropna(subset=["user_id"]).copy()
 
-    durations = []
+    if logins.empty or logouts.empty:
+        return None
 
-    for uid in logins["user_id"].dropna().unique():
-        u_logins = logins[logins["user_id"] == uid]["created_at"].sort_values()
-        u_logouts = logouts[logouts["user_id"] == uid]["created_at"].sort_values()
+    logins = logins.sort_values(["user_id", "created_at"])
+    logouts = logouts.sort_values(["user_id", "created_at"])
 
-        for li_ts, lo_ts in zip(u_logins, u_logouts):
-            dur = (lo_ts - li_ts).total_seconds()
-            if dur > 0:
-                durations.append(dur)
+    logins["seq"] = logins.groupby("user_id").cumcount()
+    logouts["seq"] = logouts.groupby("user_id").cumcount()
 
-    return round(sum(durations) / len(durations), 2) if durations else None
+    merged = pd.merge(logins, logouts, on=["user_id", "seq"], suffixes=("_in", "_out"))
+
+    durations = (merged["created_at_out"] - merged["created_at_in"]).dt.total_seconds()
+    durations = durations[durations > 0]
+
+    return round(durations.mean(), 2) if not durations.empty else None
 
 
 def calc_d1_retention(day_df, prev_df) -> float | None:
