@@ -18,9 +18,12 @@ def _transform_aggregates(**context):
     target_days = sorted([d for d in df["day"].unique() if d_from <= d <= d_to])
     rows = []
 
+    grouped = dict(list(df.groupby("day")))
+    empty_df = df.iloc[:0]
+
     for day in target_days:
-        day_df = df[df["day"] == day]
-        prev_df = df[df["day"] == day - timedelta(days=1)]
+        day_df = grouped.get(day, empty_df)
+        prev_df = grouped.get(day - timedelta(days=1), empty_df)
         rows.append(build_daily_metrics(day, day_df, prev_df))
 
     result = pd.DataFrame(rows)
