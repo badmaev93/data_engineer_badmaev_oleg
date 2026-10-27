@@ -12,7 +12,12 @@ def _resolve_dates(context):
     date_to = params.get("date_to")
 
     if date_from and date_to:
-        return str(date_from), str(date_to)
+        date_from_str = str(date_from)
+        date_to_str = str(date_to)
+        # 🔒 Security enhancement: Validate user input format
+        datetime.strptime(date_from_str, "%Y-%m-%d")
+        datetime.strptime(date_to_str, "%Y-%m-%d")
+        return date_from_str, date_to_str
 
     ds = context.get("ds")
     if not ds:
