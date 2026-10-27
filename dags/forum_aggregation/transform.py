@@ -18,8 +18,6 @@ def _transform_aggregates(**context):
     target_days = sorted([d for d in df["day"].unique() if d_from <= d <= d_to])
     rows = []
 
-    # ⚡ Bolt: Optimize O(N^2) DataFrame scanning by grouping the dataset upfront.
-    # Creates a hash-map by day to allow O(1) subset access.
     grouped = dict(list(df.groupby("day")))
     empty_df = df.iloc[:0]
 
