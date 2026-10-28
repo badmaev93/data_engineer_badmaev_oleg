@@ -17,18 +17,25 @@ def pick_session_ts(session_bounds, active_uids, min_ts=None, offset_start=10, o
     sec = random.randint(offset_start, max(offset_start + 1, span))
     return uid, start_bound + timedelta(seconds=sec)
 
-def gen_first_visits(base_dt: datetime) -> list[dict]:
-    """Генерирует 5–15 первых посещений форума анонимами."""
+def gen_first_visits(base_dt: datetime, n_pool: int = 250) -> list[dict]:
+    """Генерирует первые посещения форума анонимами (масштабируется от n_pool)."""
+    min_visits = max(5, n_pool // 50)
+    max_visits = max(15, n_pool // 15)
     logs = []
-    for _ in range(random.randint(5, 15)):
+    for _ in range(random.randint(min_visits, max_visits)):
         ts = base_dt + timedelta(seconds=random.randint(0, 86399))
         logs.append(_log_entry(None, "first_visit", "Первый заход на форум", ts))
     return logs
 
 def gen_registrations(base_dt, users_pool, pool_idx, days_left, session_bounds):
-    """Регистрирует 5–8 новых пользователей утром и открывает им сессию."""
+    """Регистрирует новых пользователей утром и открывает им сессию (масштабируется от пула)."""
     remaining_users = len(users_pool) - pool_idx
-    n_reg = max(5, min(random.randint(5, 8), remaining_users - days_left * 5))
+    # Равномерно распределяем пул по оставшимся дням с разбросом рандомайзера
+    avg_daily = max(5, remaining_users // (days_left + 1))
+    min_reg = max(5, int(avg_daily * 0.7))
+    max_reg = max(8, int(avg_daily * 1.3))
+    n_reg = max(5, min(random.randint(min_reg, max_reg), remaining_users - days_left * 5))
+
     today_reg, logs = [], []
 
     for _ in range(n_reg):
@@ -52,13 +59,20 @@ def gen_returning_logins(base_dt, registered, yesterday_registered, session_boun
     """Генерирует входы вернувшихся пользователей (включая вчерашнюю когорту D1)."""
     d1_returns = []
     if yesterday_registered:
-        n_d1 = max(1, min(len(yesterday_registered), random.randint(2, max(2, len(yesterday_registered) - 1))))
+        min_d1 = max(1, int(len(yesterday_registered) * 0.25))
+        max_d1 = max(min_d1, int(len(yesterday_registered) * 0.75))
+        n_d1 = min(len(yesterday_registered), random.randint(min_d1, max_d1))
         d1_returns = random.sample(yesterday_registered, n_d1)
 
     others = [u for u in registered if u["id"] not in session_bounds and u not in d1_returns]
     random.shuffle(others)
+
+    min_others = max(3, int(len(others) * 0.1))
+    max_others = max(7, int(len(others) * 0.25))
+    n_others = min(len(others), random.randint(min_others, max_others))
+
     logs = []
-    for u in d1_returns + others[:random.randint(3, 7)]:
+    for u in d1_returns + others[:n_others]:
         login_ts = base_dt + timedelta(seconds=random.randint(3600, 50400))
         logout_ts = min(login_ts + timedelta(seconds=random.randint(7200, 32400)), base_dt + timedelta(hours=23, minutes=55))
         session_bounds[u["id"]] = (login_ts, logout_ts)

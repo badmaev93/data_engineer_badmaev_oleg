@@ -1,6 +1,9 @@
 import pandas as pd
 from datetime import datetime
-from dags.forum_aggregation.metrics import calc_avg_session_duration
+try:
+    from forum_aggregation.metrics import calc_avg_session_duration
+except ImportError:
+    from dags.forum_aggregation.metrics import calc_avg_session_duration
 
 def test_calc_avg_session_duration_basic():
     rows = [
@@ -13,7 +16,6 @@ def test_calc_avg_session_duration_basic():
     ]
     df = pd.DataFrame(rows)
 
-    # Expected average: (1800 + 3600 + 900) / 3 = 6300 / 3 = 2100.0
     res = calc_avg_session_duration(df)
     assert res == 2100.0, f"Expected 2100.0, got {res}"
 
@@ -36,9 +38,7 @@ def test_calc_avg_session_duration_unmatched():
         {"user_id": 1, "action_type": "login", "created_at": datetime(2023, 1, 1, 10, 0, 0)},
         {"user_id": 1, "action_type": "logout", "created_at": datetime(2023, 1, 1, 10, 30, 0)},  # 1800s
         {"user_id": 2, "action_type": "login", "created_at": datetime(2023, 1, 1, 11, 0, 0)},
-        # Missing logout for user 2
     ]
     df = pd.DataFrame(rows)
-    # Merged dataset should only match user 1's full session
     res = calc_avg_session_duration(df)
     assert res == 1800.0, f"Expected 1800.0, got {res}"

@@ -28,7 +28,7 @@ def _generate_logs(**context):
         days_left = days_in_month - day_num
         session_bounds = {}
 
-        logs.extend(gen_first_visits(base_dt))
+        logs.extend(gen_first_visits(base_dt, len(users_pool)))
         today_reg, reg_logs, pool_idx = gen_registrations(base_dt, users_pool, pool_idx, days_left, session_bounds)
         registered.extend(today_reg)
         logs.extend(reg_logs)
