@@ -1,4 +1,28 @@
+# Forum Event Telemetry Pipeline (Apache Airflow + PostgreSQL + Pandera)
 
+> **English Summary** *(Full Russian technical specification follows below)*
+
+Containerized end-to-end ETL/ELT pipeline modeling and aggregating high-volume forum user activity logs into daily cohort analytics CSVs.
+
+### Architecture & Key Engineering Decisions
+
+- **PostgreSQL Range Partitioning (`schema.sql`):** `user_logs` uses monthly `PARTITION BY RANGE (created_at)` tables plus a `user_logs_default` safety partition. Aggregation queries filter directly on `TIMESTAMPTZ` bounds (avoiding column casts) to guarantee **Partition Pruning** and instant `DROP`/`DETACH` partition lifecycle management.
+- **Targeted Indexing Strategy:** Combines a chronological **BRIN** index (`~100x` smaller footprint than B-tree on append-only logs) with **partial B-tree indexes** (`WHERE user_id IS NOT NULL`, `WHERE target_object_id IS NOT NULL`, `WHERE deleted_at IS NULL`) and a composite aggregation index `(response_status, action_type, created_at DESC)`.
+- **Orchestration (`Apache Airflow` DAGs):**
+  - `forum_data_generation`: generates synthetic monthly forum traffic enforcing strict chronological invariants (`login_ts < action_ts < logout_ts`, `topic.created_at <= post.created_at`) and realistic cohort D1 retention before loading into PostgreSQL.
+  - `forum_log_aggregation` (`@daily` or manual `date_from` / `date_to`): extracts raw logs with a 1-day lookback window so daily growth and D1 retention metrics stay accurate on single-day schedules, exports daily KPI CSVs (`new_accounts`, `anon_messages_pct`, `total_messages`, `topics_growth_pct`, `avg_session_duration_sec`, `d1_retention_pct`) to `./output/`, and logs threshold anomaly alerts.
+- **Schema & Business-Rule Validation (`Pandera`):** Enforces `DataFrameSchema` checks (UTC datetime coercion, enum/HTTP bounds, non-null guarantees, auth/anon business rules, and session/topic chronology assertions) prior to PostgreSQL ingestion and prior to daily aggregation.
+
+### Quick Start
+
+```bash
+docker-compose up --build
+```
+
+- **Airflow UI:** `http://localhost:8080` (`admin` / `admin`) -> trigger `forum_data_generation`, then run `forum_log_aggregation`
+- **PostgreSQL:** `localhost:5433` (`user: forum`, `password: forum`, `db: fp`)
+
+---
 ## Быстрый старт
 
 ```bash
